@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+
+import sys, os
+
+from annexremote import Master, ExportRemote, RemoteError
+
+import openneuro
+
+# TODO: make sure we *can't* be used as a SpecialRemote. SpecialRemotes don't make sense on OpenNeuro,
+# which wants to run dataset validators on what you upload. is bad.
+# I think what that means is that transfer_store, transfer_retrieve, checkpresent and remove should all be no-ops
+# And we should try to catch at initremote if we're getting set up as an export or special remote
+
+class OpenNeuro(ExportRemote):
+    def initremote(self):
+        # initialize the remote, eg. create the folders
+        # raise RemoteError if the remote couldn't be initialized
+        raise RemoteError("NotImplemented")
+
+    def prepare(self):
+        # prepare to be used, eg. open TCP connection, authenticate with the server etc.
+        # raise RemoteError if not ready to use
+        raise RemoteError("This cannot NotImplemented")
+
+    def transfer_store(self, key, filename):
+        # store the file in `filename` to a unique location derived from `key`
+        # raise RemoteError if the file couldn't be stored
+        raise RemoteError("NotImplemented")
+
+    def transfer_retrieve(self, key, filename):
+        # get the file identified by `key` and store it to `filename`
+        # raise RemoteError if the file couldn't be retrieved
+        raise RemoteError("NotImplemented")
+
+    def checkpresent(self, key):
+        # return True if the key is present in the remote
+        # return False if the key is not present
+        # raise RemoteError if the presence of the key couldn't be determined, eg. in case of connection error
+        raise RemoteError("NotImplemented")
+        
+    def remove(self, key):
+        # remove the key from the remote
+        # raise RemoteError if it couldn't be removed
+        # note that removing a not existing key isn't considered an error
+        raise RemoteError("NotImplemented")
+
+    def transferexport_store(self, key, local_file, remote_file):
+        raise RemoteError("NotImplemented")
+
+    def transferexport_retrieve(self, key, local_file, remote_file):
+        raise RemoteError("NotImplemented")
+
+    def checkpresentexport(self, key, remote_file):
+        raise RemoteError("NotImplemented")
+
+    def removeexport(self, key, remote_file):
+        raise RemoteError("NotImplemented")
+
+
+if __name__ == '__main__':
+    master = Master()
+    remote = OpenNeuro(master)
+    master.LinkRemote(remote)
+    master.Listen()
