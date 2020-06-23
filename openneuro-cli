@@ -25,3 +25,8 @@ if __name__ == '__main__':
 
     r = client.publishDataset('ds002919')
     print(r)
+
+    # progress bars would be good...
+    #client.downloadFile('ds002904', 'sub-ecog01/ses-preimp/anat/sub-ecog01_ses-preimp_T1w.nii.gz', 'bigfun.nii')
+
+    client.downloadDataset('ds002904', path="brainstormtutorials13/actuallyheretho")

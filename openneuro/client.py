@@ -1,8 +1,12 @@
 
 from . import __version__
 
+import os
 import io
 import asyncio
+import random
+
+import logging
 
 import requests  # for downloads; TODO: don't use two different http libraries
 from aiogqlc import GraphQLClient # for uploads
@@ -82,6 +86,14 @@ class Client:
         # in firefox, it gives a .zip; with scripts, it gives json? what?
         return url
 
+    def _download(self, url, target):
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        response = self._session.get(url, stream=True)
+        with open(target, 'wb') as fp:
+            for chunk in response.iter_content(chunk_size=2048):
+                if chunk:
+                    fp.write(chunk)
+
     def files(self, dataset, version=None):
         url = self._datasetUrl(dataset, version)
         r = self._session.get(url)
@@ -91,9 +103,38 @@ class Client:
         return r['files']
         return r.json()
 
-    def downloadDataset(dataset):
-        raise NotImplemented()
-        # TODO: use the GraphQL API?
+    def downloadFile(self, dataset, file, target=None, version=None):
+        if target is None: target = file # XXX check for directory traversal (use os.path.relpath?)
+
+        m = self.fileDetails(dataset, file, version=version)
+        if not m['urls']:
+            raise NotFoundError(f'{file} is indexed but has no URLs to download from.')
+        url = random.choice(m['urls']) # should we always take the first? the last? try to find the closest mirror?
+        return self._download(url, target)
+
+    def fileDetails(self, dataset, file, version=None):
+        # there does not seem to be *any* API, either in GraphQL or not,
+        # for just asking "is a file there?"
+        # The only API is to download the *entire* file list best we can do is
+        # Maybe we should cache .files()? Python 3.8 has https://docs.python.org/3/library/functools.html#functools.cached_property in the stdlib
+
+        files = self.files(dataset, version=version)
+        for metadata in files:
+            if metadata['filename'] == file:
+                return metadata
+        raise NotFoundError(f'{file} not found in {dataset} (at version {version}. {len(files)} were found but not the one you seek.')
+
+    def downloadDataset(self, dataset, version=None, path=None):
+        if path is None:
+            path = os.getcwd()
+        os.makedirs(path, exist_ok=True)
+        for m in self.files(dataset, version=None):
+            try:
+                self._download(random.choice(m['urls']), os.path.join(path, m['filename'])) # XXX fix the directory traversal vuln here
+            except Exception:
+                # log it but continue
+                logging.exception(f"Unable to download {m['filename']}")
+                continue
 
     def publishDataset(self, dataset):
         query = '''
