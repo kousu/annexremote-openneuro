@@ -12,6 +12,13 @@ import openneuro
 if __name__ == '__main__':
     token = os.environ.get('OPENNEURO_TOKEN', None)
     client = openneuro.Client(token)
-    c = client.files('ds002902') # DEBUG
+    c = client.files('ds002919') # DEBUG
     from pprint import pprint
     pprint(c)
+
+    import io
+    b = io.BytesIO()
+    with open(__file__, 'rb') as e: b.write(e.read())
+    b.seek(0)
+    r = client.upload('ds002919', b, 'path/to/the/other/file/fsd---fuzz.nii.gz')
+    print(r)
