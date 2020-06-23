@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+
+"""
+cli client for https://openneuro.org
+
+(this is an alternative to https://github.com/OpenNeuroOrg/openneuro/blob/master/packages/openneuro-cli/)
+"""
+
+import os
+import openneuro
+
+if __name__ == '__main__':
+    token = os.environ.get('OPENNEURO_TOKEN', None)
+    client = openneuro.Client(token)
+    c = client.files('ds002902') # DEBUG
+    from pprint import pprint
+    pprint(c)

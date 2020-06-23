@@ -21,5 +21,6 @@ setup(name='annexremote-openneuro',
       #    'git-annex-remote-openneuro=git_annex_remote_openneuro.remote:main',
       #  ]}
       # I don't need this the setuptools gunk. What happened to "there should only be one way to do it?"
-      scripts=['git-annex-remote-openneuro']
+      scripts=['git-annex-remote-openneuro',
+               'openneuro-cli']
      )
