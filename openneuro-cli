@@ -22,3 +22,6 @@ if __name__ == '__main__':
     b.seek(0)
     r = client.upload('ds002919', b, 'path/to/the/other/file/fsd---fuzz.nii.gz')
     print(r)
+
+    r = client.publishDataset('ds002919')
+    print(r)

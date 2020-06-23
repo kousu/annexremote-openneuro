@@ -96,7 +96,19 @@ class Client:
         # TODO: use the GraphQL API?
 
     def publishDataset(self, dataset):
-        raise NotImplemented()
+        query = '''
+            mutation($dataset: ID!) {
+                publishDataset(datasetId: $dataset)
+            }
+        '''
+        variables = {
+            'dataset': dataset,
+        }
+        response = execute_sync(self._graphql, query, variables)
+        if response['publishDataset'] != True:
+            # it would be strange to get as far as getting a true/false
+            # and *not* having the publish work
+            raise RuntimeError('Dataset failed to publish.') # ?
 
     def deleteDataset(self, dataset):
         raise NotImplemented()
