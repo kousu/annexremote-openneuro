@@ -13,6 +13,25 @@ def asyncio_run(*args, **kwargs):
     return asyncio.get_event_loop().run_until_complete(*args, **kwargs)
     # in python3.8 this is just 'asyncio.run()'
 
+async def execute(graphql, query, variables=None):
+    "execute a GraphQL statement with error handling"
+    # TODO: this should be down in the graphql library, like requests.Response.raise_for_status()
+    response = await graphql.execute(query, variables=variables)
+    if response.status != 200:
+        raise RuntimeError(await response.text())
+    response = await response.json()
+    response = response['data']
+    return response
+
+def execute_sync(graphql, query, variables=None):
+    "execute a GraphQL query, blockingly and with error handling"
+
+    # plugging asyncio to not asyncio is awkward :/
+    # it would be nice if `await x` when not in an async context
+    # was shorthand for asyncio.run(x) (ie. it just became a blocking call)
+    # or if *all* of python was async'd, like Javascript, so that you're always on an async thread and there's no need to notate it
+    return asyncio_run(execute(graphql, query, variables))
+
 class NamedStream(io.IOBase):
     """
     A filestream with an explicit .name, chosen by the user.
@@ -97,19 +116,7 @@ class Client:
             'label': description
         }
 
-        # plugging asyncio to not asyncio is awkward :/
-        async def execute():
-            return await self._graphql.execute(query, variables=variables)
-        async def response_text():
-            return await response.text()
-        async def response_json():
-            return await response.json()
-
-        response = asyncio_run(execute())
-        if response.status != 200:
-            raise RuntimeError(asyncio_run(response_text()))
-        response = asyncio_run(response_json())
-        response = response['data']
+        response = execute_sync(self._graphql, query, variables)
         return response['createDataset']['id']
 
     def upload(self, dataset, file, path):
@@ -161,18 +168,4 @@ class Client:
             'files': filetree,
         }
 
-        # plugging asyncio to not asyncio is awkward :/
-        # it would be nice if `await x` when not in an async context was shorthand for asyncio.run(x) (ie. it just became a blocking call)
-        async def execute():
-            return await self._graphql.execute(query, variables=variables)
-        async def response_text():
-            return await response.text()
-        async def response_json():
-            return await response.json()
-
-        response = asyncio_run(execute())
-        if response.status != 200:
-            raise RuntimeError(asyncio_run(response_text()))
-        response = asyncio_run(response_json())
-        response = response['data']
-        return response
+        return execute_sync(self._graphql, query, variables)
