@@ -31,7 +31,6 @@ or
 ```
 pip install -e .
 ```
-```
 
 Once set up (i.e. `git-annex-remote-openneuro` is on your $PATH), you can run the tests with
 
