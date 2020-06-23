@@ -68,7 +68,7 @@ class Client:
         self.server = server
         # TODO: normalize server (urllib.parse) to ensure it has no trailing /
         self._graphql = GraphQLClient(
-            'https://openneuro.org/crn/graphql',
+            f'{server}/crn/graphql',
             headers={'Cookie': f'accessToken={auth_token}'})
 
         self._session = requests.Session()
