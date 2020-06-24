@@ -63,6 +63,11 @@ class Client:
     - an incorrect auth token sometimes causes 500s instead of 403s like it should
     - cannot handle batch file uploads (you can just write a loop and it's almost as good)
     """
+
+    # according to schema introspection, these are the 'mutations' (i.e. inserts/commands) available:
+    # >>> a.fields.keys()
+    # odict_keys(['createDataset', 'deleteDataset', 'createSnapshot', 'deleteSnapshot', 'updateFiles', 'deleteFiles', 'deleteFile', 'updatePublic', 'updateSummary', 'updateValidation', 'updateSnapshotFileUrls', 'updatePermissions', 'removePermissions', 'removeUser', 'setAdmin', 'setBlocked', 'trackAnalytics', 'followDataset', 'starDataset', 'publishDataset', 'updateDescription', 'updateDescriptionList', 'updateReadme', 'addComment', 'editComment', 'subscribeToNewsletter', 'addMetadata', 'updateRef'])
+
     def __init__(self, auth_token=None, server='https://openneuro.org'):
         self.auth_token = auth_token
         self.server = server
