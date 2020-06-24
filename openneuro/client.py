@@ -152,7 +152,18 @@ class Client:
             raise RuntimeError('Dataset failed to publish.') # ?
 
     def deleteDataset(self, dataset):
-        raise NotImplemented()
+        query = '''
+            mutation deleteDataset($id: ID!) {
+                deleteDataset(id: $id)
+            }
+        '''
+        variables = {
+            'id': dataset,
+        }
+        response = execute_sync(self._graphql, query, variables, operation="deleteDataset")
+        print("delete", dataset, response)
+        if response['deleteDataset'] != True:
+            raise RuntimeError('Dataset failed to delete.') # ?
 
     def createDataset(self, description="", metadata=None):
         if metadata is not None:
@@ -173,6 +184,8 @@ class Client:
         return response['createDataset']['id']
 
     def upload(self, dataset, file, path):
+
+        # TODO: support a 'delete' flag, to behave like rsync --delete
 
         # TODO: support self.upload(id, "path/to/file.gz"), self.upload(dataset, "/mnt/nfs/path/to/file.gz", "forgotten/place.com/elsewhere.gz") and self.upload(dataset, socket, "forgotten/place.com/elsewhere.zip")
 
