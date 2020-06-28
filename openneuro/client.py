@@ -13,6 +13,8 @@ from aiogqlc import GraphQLClient # for uploads
 
 from urllib.parse import urlparse
 
+class OpenNeuroError(Exception): pass
+
 def asyncio_run(*args, **kwargs):
     return asyncio.get_event_loop().run_until_complete(*args, **kwargs)
     # in python3.8 this is just 'asyncio.run()'
@@ -21,11 +23,29 @@ async def execute(graphql, query, variables=None, operation=None):
     "execute a GraphQL statement with error handling"
     # TODO: this should be down in the graphql library, like requests.Response.raise_for_status()
     response = await graphql.execute(query, variables=variables, operation=operation)
-    if response.status != 200:
-        raise RuntimeError(await response.text())
+
+    # openneuro's GraphQL server sometimes gives HTTP error codes,
+    # but often happily gives 200 OK even on errors
+    # TODO: handle response.status != 200
+    #       the trouble is...in the few cases I've observed that cause that, the errors are still formatted GraphQL-style.
+    #       so it makes sense to ignore the HTTP codes and just look in the returned JSON
+    #       but what if the GraphQL server itself is broken and not returning JSON?
+
     response = await response.json()
-    response = response['data']
-    return response
+    if 'errors' in response:
+        errors = response['errors']
+        if len(errors) == 1:
+            # common case: there's usually (always??) only one error returned
+            # so strip away the extra wrapping in that case
+            errors = errors[0]
+            errors = errors['message']
+        #errors = pformat(errors) # DEBUG for readability;
+        # what I should actually do is extract error['message'], error['extensions']['code'] and maybe error['extensions']['exception']['stackstrace'] and turn them into python exceptions
+        raise OpenNeuroError(errors)
+    elif 'data' in response:
+        return response['data']
+    else:
+        raise RuntimeError('No data returned')
 
 def execute_sync(graphql, query, variables=None, operation=None):
     "execute a GraphQL query, blockingly and with error handling"
