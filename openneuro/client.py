@@ -94,7 +94,7 @@ class Client:
         # TODO: normalize server (urllib.parse) to ensure it has no trailing /
         self._graphql = GraphQLClient(
             f'{server}/crn/graphql',
-            headers={'Cookie': f'accessToken={auth_token}'})
+            headers={'Cookie': f'accessToken={auth_token}'} if auth_token else {})
 
         self._session = requests.Session()
         self._session.headers['User-Agent'] = f'python openneuro-client {__version__}'
