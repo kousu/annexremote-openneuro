@@ -55,7 +55,14 @@ class ProgressFile(io.IOBase):
         return getattr(self.wrapped, name)
 
 
-@click.group()
+class UnsortedGroup(click.Group):
+    """
+    """
+    # https://stackoverflow.com/questions/47972638/how-can-i-define-the-order-of-click-sub-commands-in-help
+    def list_commands(self, *args, **kwargs):
+        return list(self.commands)
+
+@click.group(cls=UnsortedGroup)
 def cli():
     pass
 
