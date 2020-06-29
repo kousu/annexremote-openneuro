@@ -209,6 +209,41 @@ class Client:
         response = execute_sync(self._graphql, query, variables)
         return response['createDataset']['id']
 
+    def updateDescription(self, dataset, field, value):
+        """
+        Set the value of a metadata field in a dataset.
+
+        This is effectively just a shortcut for updating the
+        contents of the dataset's /dataset_description.json.
+
+        Examples:
+
+        Set the dataset's title.
+        >>> client.updateDescription('ds000001', 'Name', 'MRI Scans')
+
+        Beware:
+        This will fail if dataset_description.json is missing or otherwise corrupted.
+        See https://github.com/OpenNeuroOrg/openneuro/issues/1680.
+
+        For a workaround, explicitly-initialize it:
+        >>> client.uploadFile(id, io.BytesIO(b"{}"), "dataset_description.json")
+        """
+        query = '''
+            mutation updateDescription($datasetId: ID!, $field: String!, $value: String!) {
+              updateDescription(datasetId: $datasetId, field: $field, value: $value) {
+                id
+              }
+            }
+        '''
+        variables = {
+            'datasetId': dataset,
+            'field': field,
+            'value': value
+        }
+
+        response = execute_sync(self._graphql, query, variables, operation="updateDescription")
+        return response['updateDescription']
+
     def upload(self, dataset, file, path):
 
         # TODO: support a 'delete' flag, to behave like rsync --delete
