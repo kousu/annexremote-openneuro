@@ -4,6 +4,7 @@ from . import __version__
 import os
 import io
 import asyncio
+import posixpath # posixpath because that's the format the remote side uses
 import random
 
 import logging
@@ -260,3 +261,29 @@ class Client:
         }
 
         return execute_sync(self._graphql, query, variables)
+
+    def deleteFile(self, dataset, path) -> bool:
+        """
+        dataset: a dataset ID
+        path: the file path within the dataset to delete
+
+        Returns: whether the file was deleted or not.
+
+        Beware:
+        This method never explains failures -- exceptions are swallowed into
+        False -- and sometimes False is even incorrectly raised on success:
+        https://github.com/OpenNeuroOrg/openneuro/issues/1683
+        So the return value is unreliable.
+        """
+
+        query = '''mutation deleteFile($datasetId: ID!, $path: String!, $filename: String!) {
+          deleteFile(datasetId: $datasetId, path: $path, filename: $filename)}
+        '''
+        variables = {
+            'datasetId': dataset,
+            'path': posixpath.dirname(path),
+            'filename': posixpath.basename(path)
+        }
+
+        response = execute_sync(self._graphql, query, variables, operation="deleteFile")
+        return response['deleteFile'] # whether the file was deleted or not
