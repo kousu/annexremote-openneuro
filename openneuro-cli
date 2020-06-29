@@ -7,26 +7,113 @@ cli client for https://openneuro.org
 """
 
 import os
+import posixpath
+import logging
+
+import json
+from getpass import getpass
+
+import click
+
 import openneuro
 
+@click.group()
+def cli():
+    pass
+
+@cli.command()
+def login():
+    server = input("Server [https://openneuro.org]: ")
+    if not server.strip():
+        server = 'https://openneuro.org'
+    token = getpass("OpenNeuro API Token: ")
+
+    # TODO: test credentials by connecting to server and trying to use them before accepting them
+
+    with open(os.path.expanduser("~/.openneuro"), "w") as fp: # TODO: Windows??
+        json.dump({'url': server, 'apikey': token}, fp)
+
+
+def credentials():
+    """
+    Try to load credentials to access OpenNeuro.
+
+    Environment variables
+     OPENNEURO_SERVER
+     OPENNEURO_TOKEN
+    has the highest precedence, followed by JSON file
+     ~/.openneuro
+    if either can't be found, returns None for its value.
+
+    Returns (server, token)
+    """
+    server, token = 'https://openneuro.org', None
+
+    try:
+        with open(os.path.expanduser("~/.openneuro"), "r") as fp: # TODO: Windows??
+            obj = json.load(fp) # XXX is this deserialization dangerous?
+            server = obj.get('server', server)
+            token = obj.get('apikey', token)
+    except:
+        logging.exception("Couldn't load credentials from ~/.openneuro") # DEBUG
+        pass
+
+    server = os.environ.get('OPENNEURO_SERVER', server)
+    token = os.environ.get('OPENNEURO_TOKEN', token)
+
+    return server, token
+
+#@cli.option("--delete"):
+@cli.command()
+@click.argument("dataset", required=False)
+@click.argument("path", required=False, type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True))
+def upload(dataset, path):
+    """
+    Upload the contents of PATH to DATASET.
+
+    If PATH is not given, the current directory is assumed.
+
+    If DATASET is not given, a new dataset will be created.
+    """
+    if path is None:
+        path = "."
+
+    server, token = credentials()
+    client = openneuro.Client(token, server=server)
+
+    if dataset is None:
+        # make a new dataset
+        while True: # there's gotta be a prompt-until-match in the stdlib somewhere
+            r = input("Make a new dataset? [y/N] ").strip()
+            if not r:
+                r = 'N'
+            if r.upper() == 'Y':
+                dataset = client.createDataset()
+                print(f'Created {server}/datasets/{dataset}')
+                break
+            elif r.upper() == 'N':
+                return
+            else:
+                continue # bad input, try again
+
+    for dir, _, files in os.walk(path):
+        for file in files:
+            # we have to use posixpath on the remote side, but os.path locally
+            client.uploadFile(dataset, os.path.join(dir, file), posixpath.join(dir, file))
+
+@cli.command()
+@click.argument("dataset")
+@click.option("--version", "-v", help="Dataset version (e.g. '1.2.9')")
+@click.argument("path", required=False, type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True))
+def download(version, dataset, path):
+    if path is None:
+        path = "."
+
+    server, token = credentials()
+    print(server, token)
+    client = openneuro.Client(token, server=server)
+
+    client.downloadDataset(dataset, version=version, path=path)
+
 if __name__ == '__main__':
-    token = os.environ.get('OPENNEURO_TOKEN', None)
-    client = openneuro.Client(token)
-    c = client.files('ds002919') # DEBUG
-    from pprint import pprint
-    pprint(c)
-
-    import io
-    b = io.BytesIO()
-    with open(__file__, 'rb') as e: b.write(e.read())
-    b.seek(0)
-    r = client.upload('ds002919', b, 'path/to/the/other/file/fsd---fuzz.nii.gz')
-    print(r)
-
-    r = client.publishDataset('ds002919')
-    print(r)
-
-    # progress bars would be good...
-    #client.downloadFile('ds002904', 'sub-ecog01/ses-preimp/anat/sub-ecog01_ses-preimp_T1w.nii.gz', 'bigfun.nii')
-
-    client.downloadDataset('ds002904', path="brainstormtutorials13/actuallyheretho")
+    cli()
