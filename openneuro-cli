@@ -54,6 +54,36 @@ class ProgressFile(io.IOBase):
         # recall: this is only run as a fallback
         return getattr(self.wrapped, name)
 
+def credentials():
+    """
+    Try to load credentials to access OpenNeuro.
+
+    Environment variables
+     OPENNEURO_SERVER
+     OPENNEURO_TOKEN
+    has the highest precedence, followed by JSON file
+     ~/.openneuro
+    if either can't be found, returns None for its value.
+
+    Returns (server, token)
+    """
+    server, token = 'https://openneuro.org', None
+
+    try:
+        with open(os.path.expanduser("~/.openneuro"), "r") as fp: # TODO: Windows??
+            obj = json.load(fp) # XXX is this deserialization dangerous?
+            server = obj.get('server', server)
+            token = obj.get('apikey', token)
+    except:
+        #logging.exception("Couldn't load credentials from ~/.openneuro") # DEBUG
+        pass
+
+    server = os.environ.get('OPENNEURO_SERVER', server)
+    token = os.environ.get('OPENNEURO_TOKEN', token)
+
+    return server, token
+
+# ----------------- cli ---------------
 
 class UnsortedGroup(click.Group):
     """
@@ -102,35 +132,6 @@ def login(server):
     with open(os.path.expanduser("~/.openneuro"), "w") as fp: # TODO: Windows??
         # this format is compatible with npm:openneuro-cli
         json.dump({'url': server, 'apikey': token}, fp)
-
-def credentials():
-    """
-    Try to load credentials to access OpenNeuro.
-
-    Environment variables
-     OPENNEURO_SERVER
-     OPENNEURO_TOKEN
-    has the highest precedence, followed by JSON file
-     ~/.openneuro
-    if either can't be found, returns None for its value.
-
-    Returns (server, token)
-    """
-    server, token = 'https://openneuro.org', None
-
-    try:
-        with open(os.path.expanduser("~/.openneuro"), "r") as fp: # TODO: Windows??
-            obj = json.load(fp) # XXX is this deserialization dangerous?
-            server = obj.get('server', server)
-            token = obj.get('apikey', token)
-    except:
-        logging.exception("Couldn't load credentials from ~/.openneuro") # DEBUG
-        pass
-
-    server = os.environ.get('OPENNEURO_SERVER', server)
-    token = os.environ.get('OPENNEURO_TOKEN', token)
-
-    return server, token
 
 @cli.command()
 @click.option("--delete", is_flag=True, help="Delete remote files that do not exist locally.")
