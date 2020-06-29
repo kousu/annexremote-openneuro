@@ -87,6 +87,12 @@ class Client:
     - cannot handle batch file uploads (you can just write a loop and it's almost as good)
     """
 
+    # It seems sort of silly to manually code each query/mutation when GraphQL is designed to be introspectable
+    # but I haven't figured out how to harness that in python. Plus some parts of the API (namely, *listing of existing files*) is not done through GraphQL.
+
+    # every openneuro graphql response includes a ['openneuro']['version'] tag, which might be useful to check.
+    # we can do this by wrapping all API calls in a decorator.
+
     # according to schema introspection, these are the 'mutations' (i.e. inserts/commands) available:
     # >>> a.fields.keys()
     # odict_keys(['createDataset', 'deleteDataset', 'createSnapshot', 'deleteSnapshot', 'updateFiles', 'deleteFiles', 'deleteFile', 'updatePublic', 'updateSummary', 'updateValidation', 'updateSnapshotFileUrls', 'updatePermissions', 'removePermissions', 'removeUser', 'setAdmin', 'setBlocked', 'trackAnalytics', 'followDataset', 'starDataset', 'publishDataset', 'updateDescription', 'updateDescriptionList', 'updateReadme', 'addComment', 'editComment', 'subscribeToNewsletter', 'addMetadata', 'updateRef'])
