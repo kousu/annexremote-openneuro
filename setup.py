@@ -12,6 +12,7 @@ setup(name='annexremote-openneuro',
       python_requires='>=3.6.0',
       install_requires=[
         'click>=7.0.0',
+        'progressbar>=2.0.0', # TODO: verify if we're compatible down to this version
         'aiogqlc@git+https://github.com/kousu/aiogqlc.git@nested-files',
         #'aiogqlc>=1.0.6', # once my patch gets merged
         'annexremote>=1.4.0', # TODO: maybe this can be an older version?

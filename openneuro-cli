@@ -7,6 +7,7 @@ cli client for https://openneuro.org
 """
 
 import os
+import io
 import posixpath
 import logging
 
@@ -14,8 +15,44 @@ import json
 from getpass import getpass
 
 import click
+from progressbar import *
 
 import openneuro
+
+
+class ProgressFile(io.IOBase):
+    """
+    A shim which reports progress in reading/writing.
+
+    >>> fp = open("yourfile", "rb")
+    >>> fp = ProgressFile(fp, lambda pos: print(f'Now at: {pos}'))
+    >>> with open("yourfile (copy)", "wb") as out:
+    ...    for chunk in ....
+
+    The motivation for this is to extract progress information
+    from deep inside libraries that wouldn't normally have a way
+    to report it.
+    """
+    def __init__(self, stream, callback):
+        self.wrapped = stream
+        self.callback = callback
+
+    def read(self, size, *args, **kwargs):
+        try:
+            return self.wrapped.read(size, *args, **kwargs)
+        finally:
+            self.callback(self.wrapped.tell())
+
+    def write(self, *args, **kwargs):
+        try:
+            return self.wrapped.write(*args, **kwargs)
+        finally:
+            self.callback(self.wrapped.tell())
+
+    def __getattr__(self, name):
+        # recall: this is only run as a fallback
+        return getattr(self.wrapped, name)
+
 
 @click.group()
 def cli():
@@ -98,8 +135,19 @@ def upload(dataset, path):
 
     for dir, _, files in os.walk(path):
         for file in files:
-            # we have to use posixpath on the remote side, but os.path locally
-            client.uploadFile(dataset, os.path.join(dir, file), posixpath.join(dir, file))
+            fname = os.path.join(dir, file)
+            widgets = [f'{fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+                       ' ', ETA(), ' ', FileTransferSpeed()]
+            pbar = ProgressBar(widgets=widgets, maxval=os.stat(fname).st_size)
+            pbar.start()
+            fp = open(fname, 'rb')
+            fp = ProgressFile(fp, pbar.update)
+            # this progress bar hack is fine for now
+            # but if we switch to it might not scale, because it requires pre-opening every single file
+
+            # NB: we have to use posixpath on the remote side, but os.path locally
+            client.uploadFile(dataset, fp, posixpath.join(dir, file))
+            pbar.finish()
 
 @cli.command()
 @click.argument("dataset")
