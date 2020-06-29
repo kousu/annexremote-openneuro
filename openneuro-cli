@@ -112,9 +112,10 @@ def credentials():
 
 #@cli.option("--delete"):
 @cli.command()
+@click.option("-f", "--force", is_flag=True, help="Automatically create a new dataset if needed.")
 @click.argument("dataset", required=False)
 @click.argument("path", required=False, type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True))
-def upload(dataset, path):
+def upload(force, dataset, path):
     """
     Upload the contents of PATH to DATASET.
 
@@ -130,18 +131,22 @@ def upload(dataset, path):
 
     if dataset is None:
         # make a new dataset
-        while True: # there's gotta be a prompt-until-match in the stdlib somewhere
-            r = input("Make a new dataset? [y/N] ").strip()
-            if not r:
-                r = 'N'
-            if r.upper() == 'Y':
-                dataset = client.createDataset()
-                print(f'Created {server}/datasets/{dataset}')
-                break
-            elif r.upper() == 'N':
-                return
-            else:
-                continue # bad input, try again
+        def prompt():
+            while True: # there's gotta be a prompt-until-match in the stdlib somewhere
+                r = input("Make a new dataset? [y/N] ").strip()
+                if not r:
+                    r = 'N'
+                if r.upper() == 'Y':
+                    return True
+                elif r.upper() == 'N':
+                    return False
+                else:
+                    continue # bad input, try again
+        if force or prompt():
+            dataset = client.createDataset()
+            print(f'Created {client.server}/datasets/{dataset}')
+        else:
+            return # no dataset means nothing to do
 
     for dir, _, files in os.walk(path):
         for file in files:
