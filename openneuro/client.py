@@ -247,28 +247,46 @@ class Client:
         response = execute_sync(self._graphql, query, variables, operation="updateDescription")
         return response['updateDescription']
 
-    def upload(self, dataset, file, path):
+    def uploadFile(self, dataset, file, path=None):
+        """
+        Upload a file to a dataset.
 
-        # TODO: support a 'delete' flag, to behave like rsync --delete
+        dataset: the dataset ID to upload to
+        file: either a filename or an open file-like object.
+        path: (optional) the path within the dataset to upload the file to.
+              If file is a file-like object, path must be given explicitly.
 
-        # TODO: support self.upload(id, "path/to/file.gz"), self.upload(dataset, "/mnt/nfs/path/to/file.gz", "forgotten/place.com/elsewhere.gz") and self.upload(dataset, socket, "forgotten/place.com/elsewhere.zip")
+        Caveats:
+        We only support uploading one file at a time (you can use a loop)
+        and we don't support uploading empty folders, even though openneuro
+        supports both empty folders and batch uploads.
+        """
 
-        # OpenNeuro implements an [experimental spec](https://github.com/jaydenseric/graphql-multipart-request-spec) for taking file uploads attached to GraphQL.
-        # it allows batching files, but we don't support that here
-        # just use a loop.
-        # (the bandwidth overhead is neglible compared to the size of most files storedo on openneuro)
+        # OpenNeuro implements this [experimental spec](https://github.com/jaydenseric/graphql-multipart-request-spec)
+        # for taking file uploads attached to GraphQL.
+        # it allows batching files, but we don't support that yet because it's tricky to get right.
+        # (the bandwidth overhead of just calling this multiple times is neglible compared
+        #  to the size of most files stored on openneuro anyway)
 
-        # like git, we also don't support uploading empty folders, even though openneuro allows that?
+        if not isinstance(file, io.IOBase):
+            # file is a filename
+            if path is None:
+                # and path wasn't given, so default the filename to the path
+                path = file
+            file = open(file, 'rb')
+        else:
+            # file is an open file/socket/something
+            if path is None:
+                # and path wasn't given, but we don't know the filename so we cannot
+                raise TypeError("file must be a filename in order to guess upload path.")
 
-        # reformat the path to the file as a [FileTree](https://github.com/OpenNeuroOrg/openneuro/blob/51aef9b199d643c07791dc3942c917291551eb73/packages/openneuro-server/src/graphql/schema.js#L176-L181)
-        # which is actually rather complicated
-
-        # This builds the FileTree inside-out.
+        # Reformat the path to the file as a [FileTree](https://github.com/OpenNeuroOrg/openneuro/blob/51aef9b199d643c07791dc3942c917291551eb73/packages/openneuro-server/src/graphql/schema.js#L176-L181)
+        # containing a single file which is actually
+        # rather complicated.
+        # Build the FileTree inside-out:
 
         # First, the root node, the file to upload:
         components = path.split('/') # TODO: use os.path or PathLib; also, think about directory traversal?
-        if not isinstance(file, io.IOBase):
-            file = open(file, 'rb')
         file = NamedStream(components[-1], file) # set the filename to upload to, explicitly
         components = components[:-1]
 
@@ -282,7 +300,7 @@ class Client:
             filetree = {'name': '/'.join(components), 'files': [], 'directories': [filetree]}
 
         # Do the upload!
-        # TODO: it would be good to get some kind of feedback
+        # TODO: it would be good to get a progressbar in here.
         # the js version has a clever hack: wrap the filestream in another stream that prints its .tell() to stderr every so many .read()s
         query = '''
             mutation($dataset: ID!, $files: FileTree!) {
@@ -298,7 +316,8 @@ class Client:
             'files': filetree,
         }
 
-        return execute_sync(self._graphql, query, variables)
+        response = execute_sync(self._graphql, query, variables)
+        return response['updateFiles']['dataset']
 
     def deleteFile(self, dataset, path) -> bool:
         """
