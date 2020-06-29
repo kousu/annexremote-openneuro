@@ -148,22 +148,33 @@ def upload(force, dataset, path):
         else:
             return # no dataset means nothing to do
 
+    remote_files = client.files(dataset)
+    remote_files = {m['filename']: m for m in remote_files}
+
     for dir, _, files in os.walk(path):
         for file in files:
-            fname = os.path.join(dir, file)
+            # NB: we have to use posixpath on the remote side, but os.path locally
+            local_fname = os.path.join(dir, file)
+            remote_fname = posixpath.join(dir, file)
+
+            if remote_fname in remote_files:
+                if remote_files[remote_fname]['size'] == os.stat(local_fname).st_size:
+                    # already uploaded
+                    # (openneuro doesn't key files by hash, https://github.com/OpenNeuroOrg/openneuro/issues/805#issuecomment-648367628
+                    #  so the only thing we can do is check the filesize to guess if it's the same or not :( )
+                    continue
 
             try:
-                widgets = [f'{fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+                widgets = [f'{remote_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
                            ' ', ETA(), ' ', FileTransferSpeed()]
-                pbar = ProgressBar(widgets=widgets, maxval=os.stat(fname).st_size)
+                pbar = ProgressBar(widgets=widgets, maxval=os.stat(local_fname).st_size)
                 pbar.start()
-                fp = open(fname, 'rb')
+                fp = open(local_fname, 'rb') # TODO: close
                 fp = ProgressFile(fp, pbar.update)
                 # this progress bar hack is fine for now
                 # but if we switch to it might not scale, because it requires pre-opening every single file
 
-                # NB: we have to use posixpath on the remote side, but os.path locally
-                client.uploadFile(dataset, fp, posixpath.join(dir, file))
+                client.uploadFile(dataset, fp, remote_fname)
                 pbar.finish()
             except:
                 logging.exception("Unable to upload {fname}")
@@ -186,17 +197,28 @@ def download(version, dataset, path):
     client = openneuro.Client(token, server=server)
 
     for m in client.files(dataset, version=version):
-        fname = os.path.join(path, m['filename']) # XXX fix the directory traversal vuln here
-        os.makedirs(os.path.dirname(fname), exist_ok=True)
+        local_fname = os.path.join(path, m['filename']) # XXX fix the directory traversal vuln here
+            # XXX *also* this isn't windows compatible; I need to parse m['filename'] using posixpath
+            # and reconstruct it using os.path
+        remote_fname = m['filename']
+
+        if os.path.exists(local_fname):
+            if os.stat(local_fname).st_size == m['size']:
+                # already downloaded
+                # (openneuro doesn't key files by hash, https://github.com/OpenNeuroOrg/openneuro/issues/805#issuecomment-648367628
+                #  so the only thing we can do is check the filesize to guess if it's the same or not :( )
+                continue
+
+        os.makedirs(os.path.dirname(local_fname), exist_ok=True)
         try:
             # TODO: skip pre-existing files
             # TODO: --delete flag
 
-            widgets = [f'{fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+            widgets = [f'{local_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
                        ' ', ETA(), ' ', FileTransferSpeed()]
             pbar = ProgressBar(widgets=widgets, maxval=m['size'])
             pbar.start()
-            fp = open(fname, 'wb')
+            fp = open(local_fname, 'wb') # TODO: close
             fp = ProgressFile(fp, pbar.update)
             # ugh this is gross: because openneuro doesn't provide a good way
             # to get per-file metadata -- it expects you to batch download it
