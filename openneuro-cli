@@ -176,6 +176,8 @@ def upload(force, dataset, path):
 
                 client.uploadFile(dataset, fp, remote_fname)
                 pbar.finish()
+            except KeyboardInterrupt:
+                raise
             except:
                 logging.exception("Unable to upload {fname}")
                 continue
@@ -226,6 +228,8 @@ def download(version, dataset, path):
             # maybe this can be fixed? add a cache keyed by file ID?
             client._download(random.choice(m['urls']), fp)
             pbar.finish()
+        except KeyboardInterrupt:
+            raise
         except Exception:
             # log it but continue
             logging.exception(f"Unable to download {m['filename']}")
