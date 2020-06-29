@@ -67,7 +67,7 @@ def cli():
     pass
 
 @cli.command()
-@click.option("--server","-s",default="https://openneuro.org",help="Specify server to connect to.")
+@click.option("--server", "-s", default="https://openneuro.org", help="Specify server to connect to.")
 def login(server):
     """
     Login to openneuro using your API token.
@@ -166,9 +166,14 @@ def upload(dataset, path):
 
 @cli.command()
 @click.argument("dataset")
-@click.option("--version", "-v", help="Dataset version (e.g. '1.2.9')")
+@click.option("--version", "-v", help="Dataset version (e.g. '1.2.9').")
 @click.argument("path", required=False, type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True))
 def download(version, dataset, path):
+    """
+    Download the contents of DATASET to PATH.
+
+    If PATH is not given, the current directory is assumed.
+    """
     if path is None:
         path = "."
 
@@ -206,6 +211,12 @@ def download(version, dataset, path):
 @cli.command()
 @click.argument("dataset")
 def publish(dataset):
+    """
+    Make DATASET publically available.
+
+    On the main https://openneuro.org instance, this will also
+    cause it to be exported to https://github.com/OpenNeuroDatasets.
+    """
     server, token = credentials()
     print(server, token)
     client = openneuro.Client(token, server=server)
