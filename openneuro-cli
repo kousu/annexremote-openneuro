@@ -62,6 +62,9 @@ class UnsortedGroup(click.Group):
     def list_commands(self, *args, **kwargs):
         return list(self.commands)
 
+# TODO: use click.CommandCollection <https://click.palletsprojects.com/en/7.x/commands/#merging-multi-commands>
+# to avoid code duplication by making a single group whose main code does the logging in / etc and passes it along as ctx?
+
 @click.group(cls=UnsortedGroup)
 def cli():
     pass
@@ -110,12 +113,12 @@ def credentials():
 
     return server, token
 
-#@cli.option("--delete"):
 @cli.command()
+@click.option("--delete", is_flag=True, help="Delete remote files that do not exist locally.")
 @click.option("-f", "--force", is_flag=True, help="Automatically create a new dataset if needed.")
 @click.argument("dataset", required=False)
 @click.argument("path", required=False, type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True))
-def upload(force, dataset, path):
+def upload(delete, force, dataset, path):
     """
     Upload the contents of PATH to DATASET.
 
@@ -155,14 +158,17 @@ def upload(force, dataset, path):
         for file in files:
             # NB: we have to use posixpath on the remote side, but os.path locally
             local_fname = os.path.join(dir, file)
-            remote_fname = posixpath.join(dir, file)
+            remote_fname = os.path.relpath(posixpath.join(dir, file), path)
 
             if remote_fname in remote_files:
-                if remote_files[remote_fname]['size'] == os.stat(local_fname).st_size:
-                    # already uploaded
-                    # (openneuro doesn't key files by hash, https://github.com/OpenNeuroOrg/openneuro/issues/805#issuecomment-648367628
-                    #  so the only thing we can do is check the filesize to guess if it's the same or not :( )
-                    continue
+                try:
+                    if remote_files[remote_fname]['size'] == os.stat(local_fname).st_size:
+                        # already uploaded
+                        # (openneuro doesn't key files by hash, https://github.com/OpenNeuroOrg/openneuro/issues/805#issuecomment-648367628
+                        #  so the only thing we can do is check the filesize to guess if it's the same or not :( )
+                        continue
+                finally:
+                    del remote_files[remote_fname]
 
             try:
                 widgets = [f'{remote_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
@@ -179,14 +185,31 @@ def upload(force, dataset, path):
             except KeyboardInterrupt:
                 raise
             except:
-                logging.exception("Unable to upload {fname}")
+                logging.exception("Unable to upload {local_fname}")
+                continue
+    if delete:
+        # go through the leftover remote_files
+        # TODO: batch this with deleteFiles() ; this is *extremely slow* to do one by one; I think because internally they are doing `datalad save` (i.e. git annex add . && git add . && git commit) on every deletion.
+        # TODO: compare how rsync displays this case; does it intermix the deletions among the transfers?
+        for remote_fname in remote_files:
+            try:
+                widgets = [f'Delete {remote_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker())]
+                pbar = ProgressBar(widgets=widgets)
+                pbar.start()
+                client.deleteFile(dataset, remote_fname)
+                pbar.finish()
+            except KeyboardInterrupt:
+                raise
+            except:
+                logging.exception("Unable to delete {remote_fname}")
                 continue
 
 @cli.command()
+@click.option("--delete", is_flag=True, help="Delete local files that do not exist remotely.")
 @click.argument("dataset")
 @click.option("--version", "-v", help="Dataset version (e.g. '1.2.9').")
 @click.argument("path", required=False, type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True))
-def download(version, dataset, path):
+def download(delete, version, dataset, path):
     """
     Download the contents of DATASET to PATH.
 
@@ -198,11 +221,14 @@ def download(version, dataset, path):
     server, token = credentials()
     client = openneuro.Client(token, server=server)
 
-    for m in client.files(dataset, version=version):
-        local_fname = os.path.join(path, m['filename']) # XXX fix the directory traversal vuln here
+    remote_files = client.files(dataset, version=version)
+    remote_files = {m['filename']: m for m in remote_files}
+
+    for remote_fname in remote_files:
+        m = remote_files[remote_fname]
+        local_fname = os.path.join(path, remote_fname) # XXX fix the directory traversal vuln here
             # XXX *also* this isn't windows compatible; I need to parse m['filename'] using posixpath
             # and reconstruct it using os.path
-        remote_fname = m['filename']
 
         if os.path.exists(local_fname):
             if os.stat(local_fname).st_size == m['size']:
@@ -213,9 +239,6 @@ def download(version, dataset, path):
 
         os.makedirs(os.path.dirname(local_fname), exist_ok=True)
         try:
-            # TODO: skip pre-existing files
-            # TODO: --delete flag
-
             widgets = [f'{local_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
                        ' ', ETA(), ' ', FileTransferSpeed()]
             pbar = ProgressBar(widgets=widgets, maxval=m['size'])
@@ -232,12 +255,27 @@ def download(version, dataset, path):
             raise
         except Exception:
             # log it but continue
-            logging.exception(f"Unable to download {m['filename']}")
+            logging.exception(f"Unable to download {remote_fname}")
             continue
 
-
-    # TODO: use click.CommandCollection <https://click.palletsprojects.com/en/7.x/commands/#merging-multi-commands>
-    # to avoid the code duplication by making a single group whose code does the logging in / etc ?
+    if delete:
+        for dir, _, files in os.walk(path):
+            for file in files:
+                # NB: we have to use posixpath on the remote side, but os.path locally
+                local_fname = os.path.join(dir, file)
+                remote_fname = os.path.relpath(posixpath.join(dir, file), path)
+                if remote_fname not in remote_files:
+                    try:
+                        widgets = [f'Delete {local_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker())]
+                        pbar = ProgressBar(widgets=widgets)
+                        pbar.start()
+                        os.unlink(local_fname)
+                        pbar.finish()
+                    except KeyboardInterrupt:
+                        raise
+                    except:
+                        logging.exception("Unable to delete {local_fname}")
+                        continue
 
 @cli.command()
 @click.argument("dataset")
@@ -249,7 +287,6 @@ def publish(dataset):
     cause it to be exported to https://github.com/OpenNeuroDatasets.
     """
     server, token = credentials()
-    print(server, token)
     client = openneuro.Client(token, server=server)
 
     client.publishDataset(dataset)
