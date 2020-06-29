@@ -274,56 +274,62 @@ class Client:
         # (the bandwidth overhead of just calling this multiple times is neglible compared
         #  to the size of most files stored on openneuro anyway)
 
+        needs_closing = False # XXX hack; what I really want is a 'with', but a conditional 'with'
         if not isinstance(file, io.IOBase):
             # file is a filename
             if path is None:
                 # and path wasn't given, so default the filename to the path
                 path = file
             file = open(file, 'rb')
+            needs_closing = True
         else:
             # file is an open file/socket/something
             if path is None:
                 # and path wasn't given, but we don't know the filename so we cannot
                 raise TypeError("file must be a filename in order to guess upload path.")
 
-        # Reformat the path to the file as a [FileTree](https://github.com/OpenNeuroOrg/openneuro/blob/51aef9b199d643c07791dc3942c917291551eb73/packages/openneuro-server/src/graphql/schema.js#L176-L181)
-        # containing a single file which is actually
-        # rather complicated.
-        # Build the FileTree inside-out:
+        try:
+            # Reformat the path to the file as a [FileTree](https://github.com/OpenNeuroOrg/openneuro/blob/51aef9b199d643c07791dc3942c917291551eb73/packages/openneuro-server/src/graphql/schema.js#L176-L181)
+            # containing a single file which is actually
+            # rather complicated.
+            # Build the FileTree inside-out:
 
-        # First, the root node, the file to upload:
-        components = path.split('/') # TODO: use os.path or PathLib; also, think about directory traversal?
-        file = NamedStream(components[-1], file) # set the filename to upload to, explicitly
-        components = components[:-1]
-
-        # Then all the parent directories, working upwards:
-        # Also notice how, despite having the FileTree,
-        #  OpenNeuro needs each folder labelled with a
-        #  full path to behave correctly.
-        filetree = {'name': '/'.join(components), 'files': [file], 'directories': []}
-        while components:
+            # First, the root node, the file to upload:
+            components = path.split('/') # TODO: use os.path or PathLib; also, think about directory traversal?
+            file = NamedStream(components[-1], file) # set the filename to upload to, explicitly
             components = components[:-1]
-            filetree = {'name': '/'.join(components), 'files': [], 'directories': [filetree]}
 
-        # Do the upload!
-        # TODO: it would be good to get a progressbar in here.
-        # the js version has a clever hack: wrap the filestream in another stream that prints its .tell() to stderr every so many .read()s
-        query = '''
-            mutation($dataset: ID!, $files: FileTree!) {
-                updateFiles(datasetId: $dataset, files: $files) {
-                    dataset {
-                        id
+            # Then all the parent directories, working upwards:
+            # Also notice how, despite having the FileTree,
+            #  OpenNeuro needs each folder labelled with a
+            #  full path to behave correctly.
+            filetree = {'name': '/'.join(components), 'files': [file], 'directories': []}
+            while components:
+                components = components[:-1]
+                filetree = {'name': '/'.join(components), 'files': [], 'directories': [filetree]}
+
+            # Do the upload!
+            # TODO: it would be good to get a progressbar in here.
+            # the js version has a clever hack: wrap the filestream in another stream that prints its .tell() to stderr every so many .read()s
+            query = '''
+                mutation($dataset: ID!, $files: FileTree!) {
+                    updateFiles(datasetId: $dataset, files: $files) {
+                        dataset {
+                            id
+                        }
                     }
                 }
+            '''
+            variables = {
+                'dataset': dataset,
+                'files': filetree,
             }
-        '''
-        variables = {
-            'dataset': dataset,
-            'files': filetree,
-        }
 
-        response = execute_sync(self._graphql, query, variables)
-        return response['updateFiles']['dataset']
+            response = execute_sync(self._graphql, query, variables)
+            return response['updateFiles']['dataset']
+        finally:
+            if needs_closing:
+                file.close()
 
     def deleteFile(self, dataset, path) -> bool:
         """
