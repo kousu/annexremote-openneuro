@@ -60,17 +60,19 @@ def cli():
     pass
 
 @cli.command()
-def login():
-    server = input("Server [https://openneuro.org]: ")
-    if not server.strip():
-        server = 'https://openneuro.org'
+@click.option("--server","-s",default="https://openneuro.org",help="Specify server to connect to.")
+def login(server):
+    """
+    Login to openneuro using your API token.
+
+    You can get an auth token from https://openneuro.org/genkey.
+    """
     token = getpass("OpenNeuro API Token: ")
 
     # TODO: test credentials by connecting to server and trying to use them before accepting them
 
     with open(os.path.expanduser("~/.openneuro"), "w") as fp: # TODO: Windows??
         json.dump({'url': server, 'apikey': token}, fp)
-
 
 def credentials():
     """
