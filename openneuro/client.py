@@ -7,6 +7,8 @@ import asyncio
 import posixpath # posixpath because that's the format the remote side uses
 import random
 
+import warnings
+
 import logging
 
 import requests  # for downloads; TODO: don't use two different http libraries
@@ -191,19 +193,20 @@ class Client:
         if response['deleteDataset'] != True:
             raise RuntimeError('Dataset failed to delete.') # ?
 
-    def createDataset(self, description="", metadata=None):
-        if metadata is not None:
-            raise NotImplemented()
+    def createDataset(self, label="", metadata=None):
+        if label != "":
+            # https://github.com/OpenNeuroOrg/openneuro/issues/1679
+            warnings.warn("createDataset() ignores the label passed to it.")
 
         query = '''
-            mutation createDataset {
+            mutation createDataset($label: String!) {
                 createDataset(label: $label) {
                     id
                 }
             }
         '''
         variables = {
-            'label': description
+            'label': label
         }
 
         response = execute_sync(self._graphql, query, variables)
