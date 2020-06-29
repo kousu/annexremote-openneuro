@@ -136,18 +136,24 @@ def upload(dataset, path):
     for dir, _, files in os.walk(path):
         for file in files:
             fname = os.path.join(dir, file)
-            widgets = [f'{fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
-                       ' ', ETA(), ' ', FileTransferSpeed()]
-            pbar = ProgressBar(widgets=widgets, maxval=os.stat(fname).st_size)
-            pbar.start()
-            fp = open(fname, 'rb')
-            fp = ProgressFile(fp, pbar.update)
-            # this progress bar hack is fine for now
-            # but if we switch to it might not scale, because it requires pre-opening every single file
 
-            # NB: we have to use posixpath on the remote side, but os.path locally
-            client.uploadFile(dataset, fp, posixpath.join(dir, file))
-            pbar.finish()
+            try:
+                widgets = [f'{fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+                           ' ', ETA(), ' ', FileTransferSpeed()]
+                pbar = ProgressBar(widgets=widgets, maxval=os.stat(fname).st_size)
+                pbar.start()
+                fp = open(fname, 'rb')
+                fp = ProgressFile(fp, pbar.update)
+                # this progress bar hack is fine for now
+                # but if we switch to it might not scale, because it requires pre-opening every single file
+
+                # NB: we have to use posixpath on the remote side, but os.path locally
+                client.uploadFile(dataset, fp, posixpath.join(dir, file))
+                pbar.finish()
+            except:
+                logging.exception("Unable to upload {fname}")
+                continue
+                                `
 
 @cli.command()
 @click.argument("dataset")
