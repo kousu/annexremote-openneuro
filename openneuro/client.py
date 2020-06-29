@@ -11,10 +11,14 @@ import warnings
 
 import logging
 
-import requests  # for downloads; TODO: don't use two different http libraries
+import aiohttp
 from aiogqlc import GraphQLClient # for uploads
 
 from urllib.parse import urlparse
+
+## TODO
+#
+# [ ] Support resuming downloads.
 
 class OpenNeuroError(Exception): pass
 
@@ -101,14 +105,20 @@ class Client:
         self.auth_token = auth_token
         self.server = server
         # TODO: normalize server (urllib.parse) to ensure it has no trailing /
+
+        # TODO: share a aiohttp session between ._download and ._graphql
+        # this is coming to aiogqlc soon: https://github.com/DoctorJohn/aiogqlc/pull/6/files
         self._graphql = GraphQLClient(
             f'{server}/crn/graphql',
             headers={'Cookie': f'accessToken={auth_token}'} if auth_token else {})
 
-        self._session = requests.Session()
-        self._session.headers['User-Agent'] = f'python openneuro-client {__version__}'
-        if auth_token:
-            self._session.cookies.set('accessToken', auth_token, domain=urlparse(server).netloc, path='/')
+        self._session = aiohttp.ClientSession(
+                            headers={'User-Agent': f'python openneuro-client {__version__}'},
+                            cookies={'accessToken': auth_token} if auth_token else {},
+                            raise_for_status=True)
+
+    def __del__(self):
+        asyncio_run(self._session.close()) # aiohttp is picky
 
     def _datasetUrl(self, dataset, version=None):
         # TODO validate the dataset format; make sure it has no /s in it, etc
@@ -121,7 +131,7 @@ class Client:
         return url
 
     def _download(self, url, target):
-        response = self._session.get(url, stream=True)
+        response = asyncio_run(self._session.get(url))
 
         needs_closing = False
         if not isinstance(target, io.IOBase):
@@ -129,18 +139,18 @@ class Client:
             target = open(target, 'wb')
             needs_closing = True
         try:
-            for chunk in response.iter_content(chunk_size=2048):
-                if chunk:
-                    target.write(chunk)
+            while True:
+                chunk = asyncio_run(response.content.read(2048))
+                if not chunk: break
+                target.write(chunk)
         finally:
             if needs_closing:
                 target.close()
 
     def files(self, dataset, version=None):
         url = self._datasetUrl(dataset, version)
-        r = self._session.get(url)
-        r.raise_for_status()
-        r = r.json()
+        r = asyncio_run(self._session.get(url))
+        r = asyncio_run(r.json())
         assert r['datasetId'] == dataset # TODO: turn into a warning / other exception?
         return r['files']
         return r.json()
