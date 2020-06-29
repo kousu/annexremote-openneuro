@@ -115,5 +115,17 @@ def download(version, dataset, path):
 
     client.downloadDataset(dataset, version=version, path=path)
 
+    # TODO: use click.CommandCollection <https://click.palletsprojects.com/en/7.x/commands/#merging-multi-commands>
+    # to avoid the code duplication by making a single group whose code does the logging in / etc ?
+
+@cli.command()
+@click.argument("dataset")
+def publish(dataset):
+    server, token = credentials()
+    print(server, token)
+    client = openneuro.Client(token, server=server)
+
+    client.publishDataset(dataset)
+
 if __name__ == '__main__':
     cli()
