@@ -8,6 +8,7 @@ cli client for https://openneuro.org
 
 import os
 import io
+import random
 import posixpath
 import logging
 
@@ -153,7 +154,6 @@ def upload(dataset, path):
             except:
                 logging.exception("Unable to upload {fname}")
                 continue
-                                `
 
 @cli.command()
 @click.argument("dataset")
@@ -164,10 +164,32 @@ def download(version, dataset, path):
         path = "."
 
     server, token = credentials()
-    print(server, token)
     client = openneuro.Client(token, server=server)
 
-    client.downloadDataset(dataset, version=version, path=path)
+    for m in client.files(dataset, version=version):
+        fname = os.path.join(path, m['filename']) # XXX fix the directory traversal vuln here
+        os.makedirs(os.path.dirname(fname), exist_ok=True)
+        try:
+            # TODO: skip pre-existing files
+            # TODO: --delete flag
+
+            widgets = [f'{fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+                       ' ', ETA(), ' ', FileTransferSpeed()]
+            pbar = ProgressBar(widgets=widgets, maxval=m['size'])
+            pbar.start()
+            fp = open(fname, 'wb')
+            fp = ProgressFile(fp, pbar.update)
+            # ugh this is gross: because openneuro doesn't provide a good way
+            # to get per-file metadata -- it expects you to batch download it
+            # -- we have to call the private _download helper.
+            # maybe this can be fixed? add a cache keyed by file ID?
+            client._download(random.choice(m['urls']), fp)
+            pbar.finish()
+        except Exception:
+            # log it but continue
+            logging.exception(f"Unable to download {m['filename']}")
+            continue
+
 
     # TODO: use click.CommandCollection <https://click.palletsprojects.com/en/7.x/commands/#merging-multi-commands>
     # to avoid the code duplication by making a single group whose code does the logging in / etc ?

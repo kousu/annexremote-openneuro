@@ -121,12 +121,20 @@ class Client:
         return url
 
     def _download(self, url, target):
-        os.makedirs(os.path.dirname(target), exist_ok=True)
         response = self._session.get(url, stream=True)
-        with open(target, 'wb') as fp:
+
+        needs_closing = False
+        if not isinstance(target, io.IOBase):
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            target = open(target, 'wb')
+            needs_closing = True
+        try:
             for chunk in response.iter_content(chunk_size=2048):
                 if chunk:
-                    fp.write(chunk)
+                    target.write(chunk)
+        finally:
+            if needs_closing:
+                target.close()
 
     def files(self, dataset, version=None):
         url = self._datasetUrl(dataset, version)
@@ -157,18 +165,6 @@ class Client:
             if metadata['filename'] == file:
                 return metadata
         raise NotFoundError(f'{file} not found in {dataset} (at version {version}. {len(files)} were found but not the one you seek.')
-
-    def downloadDataset(self, dataset, version=None, path=None):
-        if path is None:
-            path = os.getcwd()
-        os.makedirs(path, exist_ok=True)
-        for m in self.files(dataset, version=None):
-            try:
-                self._download(random.choice(m['urls']), os.path.join(path, m['filename'])) # XXX fix the directory traversal vuln here
-            except Exception:
-                # log it but continue
-                logging.exception(f"Unable to download {m['filename']}")
-                continue
 
     def publishDataset(self, dataset):
         query = '''
