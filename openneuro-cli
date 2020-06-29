@@ -67,6 +67,9 @@ class UnsortedGroup(click.Group):
 
 @click.group(cls=UnsortedGroup)
 def cli():
+    """
+    Terminal interface to https://openneuro.org
+    """
     pass
 
 @cli.command()
@@ -74,14 +77,30 @@ def cli():
 def login(server):
     """
     Login to openneuro using your API token.
+    Logging in is optional. It is only necessary for
+    'upload' or for 'download' from an unpublished dataset.
 
     You can get an auth token from https://openneuro.org/genkey.
+
+    You can override these settings with environment variables:
+
+    \b
+     OPENNEURO_SERVER - set the openneuro server instance to talk to
+     OPENNEURO_TOKEN  - set the openneuro authentication token to use
+
+    For example, you might do:
+
+    \b
+    $ OPENNEURO_TOKEN=$(pass openneuro.org-api) openneuro-cli upload ds000001 ./
+
+    to keep your token secure in a password manager in the clear on your disk.
     """
     token = getpass("OpenNeuro API Token: ")
 
     # TODO: test credentials by connecting to server and trying to use them before accepting them
 
     with open(os.path.expanduser("~/.openneuro"), "w") as fp: # TODO: Windows??
+        # this format is compatible with npm:openneuro-cli
         json.dump({'url': server, 'apikey': token}, fp)
 
 def credentials():
