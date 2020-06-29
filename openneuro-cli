@@ -173,15 +173,15 @@ def upload(delete, force, dataset, path):
             try:
                 widgets = [f'{remote_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
                            ' ', ETA(), ' ', FileTransferSpeed()]
-                pbar = ProgressBar(widgets=widgets, maxval=os.stat(local_fname).st_size)
-                pbar.start()
-                fp = open(local_fname, 'rb') # TODO: close
-                fp = ProgressFile(fp, pbar.update)
-                # this progress bar hack is fine for now
-                # but if we switch to it might not scale, because it requires pre-opening every single file
-
-                client.uploadFile(dataset, fp, remote_fname)
-                pbar.finish()
+                with open(local_fname, 'rb') as fp:
+                    pbar = ProgressBar(widgets=widgets, maxval=os.stat(local_fname).st_size+1)
+                     # the +1 is a workaround for 0-length files: https://github.com/niltonvolpato/python-progressbar/issues/72
+                    fp = ProgressFile(fp, pbar.update)
+                    pbar.start()
+                    # this progress bar hack is fine for now
+                    # but if we switch to it might not scale, because it requires pre-opening every single file
+                    client.uploadFile(dataset, fp, remote_fname)
+                    pbar.finish()
             except KeyboardInterrupt:
                 raise
             except:
@@ -241,16 +241,18 @@ def download(delete, version, dataset, path):
         try:
             widgets = [f'{local_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
                        ' ', ETA(), ' ', FileTransferSpeed()]
-            pbar = ProgressBar(widgets=widgets, maxval=m['size'])
-            pbar.start()
-            fp = open(local_fname, 'wb') # TODO: close
-            fp = ProgressFile(fp, pbar.update)
-            # ugh this is gross: because openneuro doesn't provide a good way
-            # to get per-file metadata -- it expects you to batch download it
-            # -- we have to call the private _download helper.
-            # maybe this can be fixed? add a cache keyed by file ID?
-            client._download(random.choice(m['urls']), fp)
-            pbar.finish()
+            with open(local_fname, 'wb') as fp:
+                pbar = ProgressBar(widgets=widgets, maxval=m['size']+1)
+                 # the +1 is a workaround for 0-length files: https://github.com/niltonvolpato/python-progressbar/issues/72
+                 # TODO: sanitize the input here: make sure it's a >=0 int.
+                fp = ProgressFile(fp, pbar.update)
+                pbar.start()
+                # ugh this is gross: because openneuro doesn't provide a good way
+                # to get per-file metadata -- it expects you to batch download it
+                # -- we have to call the private _download helper.
+                # maybe this can be fixed? add a cache keyed by file ID?
+                client._download(random.choice(m['urls']), fp)
+                pbar.finish()
         except KeyboardInterrupt:
             raise
         except Exception:
