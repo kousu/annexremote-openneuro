@@ -195,7 +195,7 @@ def upload(delete, force, dataset, path):
                     del remote_files[remote_fname]
 
             try:
-                widgets = [f'{remote_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+                widgets = [f'{remote_fname}: ', Percentage(), ' ', Bar(),
                            ' ', ETA(), ' ', FileTransferSpeed()]
                 with open(local_fname, 'rb') as fp:
                     pbar = ProgressBar(widgets=widgets, maxval=os.stat(local_fname).st_size+1)
@@ -217,7 +217,7 @@ def upload(delete, force, dataset, path):
         # TODO: compare how rsync displays this case; does it intermix the deletions among the transfers?
         for remote_fname in remote_files:
             try:
-                widgets = [f'Delete {remote_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker())]
+                widgets = [f'Delete {remote_fname}: ', Percentage(), ' ', Bar()]
                 pbar = ProgressBar(widgets=widgets)
                 pbar.start()
                 client.deleteFile(dataset, remote_fname)
@@ -263,7 +263,7 @@ def download(delete, version, dataset, path):
 
         os.makedirs(os.path.dirname(local_fname), exist_ok=True)
         try:
-            widgets = [f'{local_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+            widgets = [f'{local_fname}: ', Percentage(), ' ', Bar(),
                        ' ', ETA(), ' ', FileTransferSpeed()]
             with open(local_fname, 'wb') as fp:
                 pbar = ProgressBar(widgets=widgets, maxval=m['size']+1)
@@ -292,7 +292,7 @@ def download(delete, version, dataset, path):
                 remote_fname = os.path.relpath(posixpath.join(dir, file), path)
                 if remote_fname not in remote_files:
                     try:
-                        widgets = [f'Delete {local_fname}: ', Percentage(), ' ', Bar(marker=RotatingMarker())]
+                        widgets = [f'Delete {local_fname}: ', Percentage(), ' ', Bar()]
                         pbar = ProgressBar(widgets=widgets)
                         pbar.start()
                         os.unlink(local_fname)
