@@ -6,6 +6,10 @@ cli client for https://openneuro.org
 (this is an alternative to https://github.com/OpenNeuroOrg/openneuro/blob/master/packages/openneuro-cli/)
 """
 
+## TODO
+#
+# [ ] Factor upload()/download(); they share a lot of the same logic, just in opposite directions
+
 import os
 import io
 import random
@@ -110,7 +114,7 @@ def login(server):
     Logging in is optional. It is only necessary for
     'upload' or for 'download' from an unpublished dataset.
 
-    You can get an auth token from https://openneuro.org/genkey.
+    You can get an auth token from https://openneuro.org/keygen.
 
     You can override these settings with environment variables:
 
